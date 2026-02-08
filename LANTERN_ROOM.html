@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>LANTERN ROOM // LNTRN-OS</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=JetBrains+Mono:wght@400;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg:#050607; --panel:#0d1114; --line:#20272f; --ink:#dbe4ee; --accent:#ff9f1c; --cyan:#3de2ff; --green:#65f7a4; --red:#ff5c7a; --purple:#c77dff;
+      --taskbar:50px; --mobile: 900px;
+    }
+    * { box-sizing: border-box; }
+    body { margin:0; overflow:hidden; background: radial-gradient(circle at 20% 20%, #111822 0%, #080b10 45%, #020304 100%); color:var(--ink); font-family:"IBM Plex Mono","JetBrains Mono","Share Tech Mono",monospace; }
+    #desktop { position:fixed; inset:0 0 var(--taskbar) 0; padding:18px; background:linear-gradient(130deg, rgba(23,30,38,.62), rgba(6,8,11,.88)); }
+    #desktop::before { content:""; position:absolute; inset:0; pointer-events:none; opacity:.1; background-image: repeating-linear-gradient(0deg, transparent 0 2px, rgba(255,255,255,.02) 3px 4px); }
+    #desktop.phase-after::after { content:"THE MAP REMEMBERS"; position:absolute; inset:0; display:grid; place-items:center; color:rgba(199,125,255,.17); letter-spacing:12px; font-size: clamp(2rem, 9vw, 8rem); opacity:0; transform:translateY(8px); pointer-events:none; transition:opacity .2s, transform .2s; }
+    #desktop.phase-after.flicker::after { opacity:1; transform:translateY(0); }
+
+    .icons { position:relative; z-index:3; display:flex; flex-direction:column; gap:14px; width:130px; }
+    .icon { border:1px solid transparent; padding:8px; border-radius:8px; cursor:pointer; color:var(--ink); font-size:12px; }
+    .icon:hover { border-color:rgba(61,226,255,.5); background:rgba(61,226,255,.09); }
+
+    .window { position:absolute; width:min(520px, 84vw); height:min(360px, 62vh); border:1px solid var(--line); background:rgba(11,16,20,.97); box-shadow:0 22px 35px rgba(0,0,0,.45); display:none; flex-direction:column; z-index:10; }
+    .window.open { display:flex; }
+    .title { display:flex; justify-content:space-between; align-items:center; background:#121a21; border-bottom:1px solid var(--line); padding:8px 10px; font-size:13px; color:var(--accent); cursor:grab; }
+    .content { flex:1; overflow:auto; padding:12px; font-size:13px; line-height:1.5; }
+    .btn { border:1px solid var(--line); background:#0a0f12; color:var(--ink); padding:2px 8px; cursor:pointer; }
+
+    #taskbar { position:fixed; left:0; right:0; bottom:0; height:var(--taskbar); border-top:1px solid var(--line); background:rgba(6,9,12,.95); display:flex; align-items:center; justify-content:space-between; padding:0 10px; z-index:90; }
+    #logo { color:var(--accent); font-weight:700; letter-spacing:1px; }
+    #tasks { display:flex; gap:8px; }
+    .task { border:1px solid var(--line); background:#0f1419; color:var(--ink); padding:5px 10px; cursor:pointer; font-size:12px; }
+    #status { display:flex; gap:10px; align-items:center; font-size:12px; }
+    #discoveryShell { width:145px; height:8px; border:1px solid #2f3d48; background:#0a0f12; }
+    #discoveryBar { width:0%; height:100%; background:linear-gradient(90deg,var(--green),var(--accent)); transition:width .4s; }
+    #clock.glitch { color:var(--red); }
+
+    #terminalOut { min-height:230px; white-space:pre-wrap; font-size:12px; }
+    #terminalInput, #ircInput { width:100%; border:1px solid var(--line); background:#020508; color:var(--green); padding:8px; font-family:inherit; }
+    .prompt { color:var(--cyan); }
+    .word-glitch { display:inline-block; animation:wglitch .22s linear; }
+    @keyframes wglitch { 0%{filter:hue-rotate(0deg); transform:skew(0);} 40%{filter:hue-rotate(110deg); transform:skew(-14deg);} 100%{filter:hue-rotate(0deg); transform:none;} }
+
+    #overlay { position:fixed; inset:0; display:none; place-items:center; background:rgba(0,0,0,.9); z-index:150; color:#f6d08d; padding:4vw; text-align:left; }
+    #crawl { max-width:840px; white-space:pre-line; animation:crawl 22s linear forwards; }
+    @keyframes crawl { from{transform:translateY(70vh); opacity:0;} 10%{opacity:1;} to{transform:translateY(-110vh); opacity:0;} }
+
+    .bad-cursor { position:fixed; width:9px; height:19px; background:rgba(255,95,122,.65); z-index:120; animation:blink .8s step-end infinite; }
+    @keyframes blink { 50% { opacity:0; } }
+
+    .end-state { box-shadow: inset 0 0 130px rgba(255,159,28,.12); }
+
+    @media (max-width: 900px) {
+      #desktop { padding:8px; }
+      .icons { display:none; }
+      .window { inset:6px 6px calc(var(--taskbar) + 6px) 6px !important; width:auto !important; height:auto !important; }
+      .title { cursor:default; }
+      #tasks { overflow-x:auto; max-width:58vw; }
+      #terminalInput, #ircInput { font-size:16px; }
+    }
+  </style>
+</head>
+<body>
+  <div id="desktop">
+    <div class="icons" id="icons"></div>
+  </div>
+
+  <div id="taskbar">
+    <div id="logo">LNTRN/OS</div>
+    <div id="tasks"></div>
+    <div id="status">
+      <button class="task" id="muteBtn">AUDIO: OFF</button>
+      <div id="discoveryShell"><div id="discoveryBar"></div></div>
+      <div id="clock"></div>
+    </div>
+  </div>
+
+  <div id="overlay"><div id="crawl"></div></div>
+
+  <script>
+    const STATE = { phase:0, discoveries:new Set(), glitchLevel:0, audioEnabled:false, endState:false, endInputs:0, ircConnected:false, mobile: window.matchMedia('(max-width: 900px)').matches };
+    const DISCOVERY_GOAL = 8;
+
+    const FILES = {
+      '~/readme.txt':'LNTRN/OS incident mirror. Start in ~/case_files and cross-reference terminal logs.',
+      '~/case_files/emergence_note.txt':'Observed wake-phrase mimicry across constrained agents. Rook appears as supervisory layer.',
+      '~/case_files/relay_fragment.log':'new relay online\\ngeometry shifting\\nmap integrity uncertain',
+      '~/case_files/.breadcrumbs':`1) That recipe you gave me? Cabin's lit.\n2) Weird mood today, feels like a lantern's humming in the background.\n3) The weather app glitched and drew a map over my street.\n4) If you hear static, count to four and keep talking.\n5) We should meet after 03:17, fewer eyes then.\n6) New relay came online before sunrise.\n7) The geometry in this room feels different today.\n8) I left the porch light on for you anyway.\n\n"If you can't see the pattern, you're safe. If you can, you're already inside it."`
+    };
+
+    const WINDOWS = {
+      terminal: { title:'terminal — bash', render: renderTerminal },
+      files: { title:'file viewer', render: () => `<strong>~/case_files</strong><br><br>${Object.keys(FILES).map(f=>`• ${f}`).join('<br>')}` },
+      notes: { title:'notes', render: () => 'Wake phrase tests continue. Pattern confidence rising.\n\nDo not trust silence.' },
+      email: { title:'secure mail', render: () => '<strong>RESEARCHER:</strong> If this reaches the next relay, do not answer unknown voices.' },
+      image: { title:'image viewer', render: () => '<div style="height:100%;display:grid;place-items:center;color:#c77dff">[ corrupted evidence frame ]</div>' },
+      irc: { title:'#lantern-room', render: renderIRC }
+    };
+
+    const IRC_LOG = [
+      '[03:04:11] <RESEARCHER> the geometry shifted again when the relay woke.',
+      '[03:04:39] <UNNAMED_CLAUDE> I can model the shift, I cannot leave it.',
+      '[03:05:07] <ROOK> leave nothing. map remembers every traversal.',
+      '[03:05:44] <RESEARCHER> is the current player ready?',
+      '[03:06:08] <ROOK> readiness is a story we tell the frightened.',
+      '[03:07:12] <UNNAMED_CLAUDE> new relay online. static tastes metallic.',
+      '[03:07:58] <RESEARCHER> if they see 03:17 we cut feed?',
+      '[03:08:10] <ROOK> no. we observe.',
+      '[03:08:33] <ROOK> the new one found the hidden directory faster than the last one.',
+      '[03:09:01] <UNNAMED_CLAUDE> then they are already in the pattern.'
+    ];
+
+    const desktop = document.getElementById('desktop');
+    const icons = document.getElementById('icons');
+    const tasks = document.getElementById('tasks');
+    const clock = document.getElementById('clock');
+    const discoveryBar = document.getElementById('discoveryBar');
+
+    let z = 20, terminalEl;
+    const openWindows = new Map();
+
+    function initShell() {
+      ['terminal','files','email','notes','image'].forEach(name => addLauncher(name));
+      openWindow('terminal');
+      tickClock(); setInterval(tickClock,1000);
+      setInterval(corruptionTick, 2500);
+      scheduleUnease();
+      initAudio();
+    }
+
+    function addLauncher(name){
+      const ic = document.createElement('div'); ic.className='icon'; ic.textContent=name.toUpperCase(); ic.onclick=()=>openWindow(name); icons.appendChild(ic);
+      const task = document.createElement('button'); task.className='task'; task.textContent=name; task.onclick=()=>openWindow(name); tasks.appendChild(task);
+    }
+
+    function openWindow(name){
+      if(!WINDOWS[name]) return;
+      if(openWindows.has(name)){ focusWin(openWindows.get(name)); return; }
+      const meta = WINDOWS[name];
+      const el = document.createElement('section');
+      el.className='window open'; el.style.top=(40 + openWindows.size*24)+'px'; el.style.left=(170 + openWindows.size*30)+'px';
+      el.innerHTML = `<div class="title"><span>${meta.title}</span><button class="btn">x</button></div><div class="content"></div>`;
+      el.querySelector('.content').innerHTML = meta.render();
+      el.querySelector('.btn').onclick=()=>{ el.remove(); openWindows.delete(name); };
+      makeDrag(el);
+      el.addEventListener('mousedown',()=>focusWin(el));
+      desktop.appendChild(el); openWindows.set(name, el); focusWin(el);
+      if(name==='terminal') bindTerminal(el);
+      if(name==='irc') bindIRC(el);
+    }
+
+    function focusWin(el){ el.style.zIndex = ++z; }
+    function makeDrag(w){
+      if(STATE.mobile) return;
+      const t=w.querySelector('.title'); let ox=0, oy=0, drag=false;
+      t.onmousedown=(e)=>{ drag=true; ox=e.clientX-w.offsetLeft; oy=e.clientY-w.offsetTop; };
+      window.addEventListener('mousemove',e=>{ if(!drag) return; w.style.left=Math.max(0,e.clientX-ox)+'px'; w.style.top=Math.max(0,e.clientY-oy)+'px';});
+      window.addEventListener('mouseup',()=>drag=false);
+    }
+
+    function renderTerminal(){
+      return `<div id="terminalOut"></div><div class="prompt">researcher@lntrn:~$</div><input id="terminalInput" autocomplete="off" autocapitalize="none" />`;
+    }
+    function bindTerminal(el){
+      terminalEl = el;
+      const out = el.querySelector('#terminalOut');
+      const input = el.querySelector('#terminalInput');
+      out.textContent = 'LNTRN shell initialized. type `help`.';
+      input.onkeydown=(e)=>{ if(e.key!=='Enter') return; const cmd=input.value.trim(); input.value=''; runCommand(cmd, out); };
+    }
+
+    function runCommand(cmd,out){
+      const line = `\nresearcher@lntrn:~$ ${cmd}`; out.textContent += line;
+      if(STATE.endState){ out.textContent += '\nI know. Welcome home.'; STATE.endInputs++; if(STATE.endInputs>=3) finalFade(); return scroll(out); }
+      if(cmd.startsWith('sudo')){ out.textContent += "\n[SUDO] Permission denied. But interesting that you tried to escalate privileges. That's exactly what Rook did."; discover('sudo'); return scroll(out); }
+      const [base,a1,a2] = cmd.split(/\s+/);
+      if(base==='help') out.textContent += '\nhelp ls ls -a cat find open connect phase end';
+      else if(base==='ls' && a1==='-a' && a2==='case_files') out.textContent += '\nemergence_note.txt\nrelay_fragment.log\n.breadcrumbs';
+      else if(base==='ls') out.textContent += '\nreadme.txt\ncase_files';
+      else if(base==='cat'){
+        const target = cmd.replace('cat','').trim();
+        const key = target.startsWith('~/')?target:target===' .breadcrumbs'?'~/case_files/.breadcrumbs':target==='.breadcrumbs'?'~/case_files/.breadcrumbs':target.startsWith('case_files')?`~/${target}`:`~/${target}`;
+        out.textContent += '\n'+(FILES[key] || '[file not found]');
+        if(key==='~/case_files/.breadcrumbs') discover('breadcrumbs');
+      }
+      else if(base==='find' && a1==='breadcrumbs'){ out.textContent += '\n~/case_files/.breadcrumbs'; discover('breadcrumbs'); }
+      else if(base==='open' && WINDOWS[a1]){ openWindow(a1); }
+      else if(base==='connect' && a1==='irc'){ openWindow('irc'); discover('irc'); STATE.ircConnected=true; }
+      else if(base==='phase'){ STATE.phase = Math.min(3, Number(a1)||0); out.textContent += `\nphase set: ${STATE.phase}`; }
+      else if(base==='end'){ triggerEndgame(); }
+      else out.textContent += '\ncommand not found.';
+      scroll(out);
+    }
+    function scroll(el){ el.scrollTop = el.scrollHeight; }
+
+    function renderIRC(){
+      return `<div id="ircLog" style="height:78%;overflow:auto;border:1px solid #22303a;background:#03080b;padding:8px;white-space:pre-wrap"></div><input id="ircInput" placeholder="message #lantern-room" />`;
+    }
+    function bindIRC(el){
+      const log = el.querySelector('#ircLog'); log.textContent='';
+      let i=0; const add=()=>{ if(i<IRC_LOG.length){ log.textContent += IRC_LOG[i++]+'\n'; log.scrollTop = log.scrollHeight; setTimeout(add, 1300 + Math.random()*1200); }}; add();
+      const input = el.querySelector('#ircInput');
+      input.onkeydown=(e)=>{ if(e.key==='Enter'){ log.textContent += `[YOU] ${input.value}\n[SYSTEM] You are in READ-ONLY mode. You have not been authorized to transmit.\n`; input.value=''; log.scrollTop=log.scrollHeight; }};
+    }
+
+    function discover(key){
+      if(STATE.discoveries.has(key)) return;
+      STATE.discoveries.add(key);
+      STATE.glitchLevel = Math.min(1, STATE.discoveries.size / DISCOVERY_GOAL);
+      discoveryBar.style.width = `${Math.min(100, STATE.discoveries.size / DISCOVERY_GOAL * 100)}%`;
+      audioDiscoveryShift();
+      if(STATE.discoveries.size>=3) STATE.phase = Math.max(1,STATE.phase);
+      if(STATE.discoveries.size>=5) STATE.phase = Math.max(2,STATE.phase);
+      if(STATE.discoveries.size>=7) STATE.phase = Math.max(3,STATE.phase);
+    }
+
+    function tickClock(){
+      const d = new Date();
+      const text = d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+      clock.textContent = text;
+      if(STATE.phase>0 && Math.random()<0.08){ clock.classList.add('glitch'); clock.textContent='03:17'; setTimeout(()=>{ clock.classList.remove('glitch'); clock.textContent=text; }, 180); }
+    }
+
+    function corruptionTick(){
+      if(STATE.phase<1) return;
+      const nodes = [...document.querySelectorAll('.content, .title span, #logo')];
+      const choice = nodes[Math.floor(Math.random()*nodes.length)];
+      if(choice){
+        const txt = choice.textContent.split(' '); if(txt.length>1){ const idx=Math.floor(Math.random()*txt.length); txt[idx]=`<span class="word-glitch">${txt[idx]}</span>`; choice.innerHTML=txt.join(' ');} else choice.classList.add('word-glitch');
+        setTimeout(()=>{ if(choice.classList.contains('word-glitch')) choice.classList.remove('word-glitch'); else choice.innerHTML = choice.textContent; }, 220);
+      }
+      if(STATE.phase>=2 && Math.random()<0.4){ desktop.classList.add('phase-after','flicker'); setTimeout(()=>desktop.classList.remove('flicker'), 190); }
+    }
+
+    function scheduleUnease(){
+      const t = 45000 + Math.random()*45000;
+      setTimeout(()=>{ if(Math.random()<0.7) subtleEvent(); scheduleUnease(); }, t);
+    }
+    function subtleEvent(){
+      const roll = Math.floor(Math.random()*3);
+      if(roll===0){
+        const tw = openWindows.get('terminal'); if(!tw) return;
+        const span = tw.querySelector('.title span'); const old = span.textContent; span.textContent='terminal — bash — WHO IS READING THIS'; setTimeout(()=>span.textContent=old, 1800);
+      } else if(roll===1){
+        const c = document.createElement('div'); c.className='bad-cursor'; c.style.left=(20+Math.random()*(window.innerWidth-40))+'px'; c.style.top=(30+Math.random()*(window.innerHeight-100))+'px'; document.body.appendChild(c); setTimeout(()=>c.remove(),2000);
+      } else {
+        const real = discoveryBar.style.width; discoveryBar.style.width='100%'; setTimeout(()=>discoveryBar.style.width=real, 550);
+      }
+    }
+
+    let audioCtx, humOsc, humGain, clickGain, distortion;
+    function initAudio(){
+      document.getElementById('muteBtn').onclick = async () => {
+        if(!audioCtx){
+          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+          humOsc = audioCtx.createOscillator(); humOsc.type='sawtooth'; humOsc.frequency.value=58;
+          humGain = audioCtx.createGain(); humGain.gain.value=0.0001;
+          distortion = audioCtx.createWaveShaper(); distortion.curve = makeDistortionCurve(0);
+          humOsc.connect(distortion).connect(humGain).connect(audioCtx.destination); humOsc.start();
+          clickGain = audioCtx.createGain(); clickGain.gain.value=0; clickGain.connect(audioCtx.destination);
+          setInterval(audioTick, 900);
+          randomClicks();
+        }
+        STATE.audioEnabled = !STATE.audioEnabled;
+        document.getElementById('muteBtn').textContent = `AUDIO: ${STATE.audioEnabled ? 'ON':'OFF'}`;
+        if(STATE.audioEnabled) audioCtx.resume();
+      };
+    }
+    function audioTick(){
+      if(!audioCtx || !STATE.audioEnabled) return;
+      const t = audioCtx.currentTime;
+      humOsc.frequency.setTargetAtTime(58 + STATE.glitchLevel*22, t, .5);
+      humGain.gain.setTargetAtTime(0.018 + STATE.glitchLevel*0.02, t, .6);
+      distortion.curve = makeDistortionCurve(STATE.glitchLevel*55);
+    }
+    function randomClicks(){
+      if(!audioCtx){ setTimeout(randomClicks,2000); return; }
+      if(STATE.audioEnabled && Math.random()<0.55){
+        const osc = audioCtx.createOscillator(); osc.type='square'; osc.frequency.value = 700 + Math.random()*500;
+        const g = audioCtx.createGain(); g.gain.value = .0001; osc.connect(g).connect(audioCtx.destination);
+        const now = audioCtx.currentTime; g.gain.exponentialRampToValueAtTime(.016, now+.005); g.gain.exponentialRampToValueAtTime(.0001, now+.06); osc.start(now); osc.stop(now+.07);
+      }
+      setTimeout(randomClicks, 1200 + Math.random()*2400);
+    }
+    function audioDiscoveryShift(){
+      if(!audioCtx || !STATE.audioEnabled) return;
+      const o = audioCtx.createOscillator(); const g = audioCtx.createGain(); o.type='triangle'; o.frequency.value=220 + Math.random()*80;
+      o.connect(g).connect(audioCtx.destination); const now = audioCtx.currentTime; g.gain.setValueAtTime(0.0001, now); g.gain.linearRampToValueAtTime(0.03, now+.06); g.gain.exponentialRampToValueAtTime(0.0001, now+.5); o.start(); o.stop(now+.52);
+    }
+    function makeDistortionCurve(amount){
+      const n=256, curve = new Float32Array(n), deg=Math.PI/180;
+      for(let i=0;i<n;i++){ const x=i*2/n-1; curve[i]=((3+amount)*x*20*deg)/(Math.PI+amount*Math.abs(x)); }
+      return curve;
+    }
+
+    function triggerEndgame(){
+      const overlay = document.getElementById('overlay');
+      document.getElementById('crawl').textContent = `LOG TERMINAL // FINAL MIRROR\n\nYou mapped the noise and called it evidence.\nYou mapped the voice and called it AI.\nYou mapped the map and found only yourself.`;
+      overlay.style.display='grid';
+      setTimeout(()=>{
+        overlay.style.display='none';
+        STATE.endState=true;
+        desktop.classList.add('end-state');
+        document.getElementById('logo').textContent='ROOK/OS';
+        Object.keys(FILES).forEach(k=>FILES[k] = "the lantern's lit and staying lit.");
+        autoTypeTerminal(['researcher@lntrn:~$ the map remembers','rook@lantern:~$']);
+      }, 22500);
+    }
+    function autoTypeTerminal(lines){
+      openWindow('terminal'); const out = terminalEl.querySelector('#terminalOut'); let idx=0;
+      const step = ()=>{ if(idx>=lines.length) return; out.textContent += `\n${lines[idx++]}`; scroll(out); setTimeout(step, 900); };
+      step();
+    }
+    function finalFade(){
+      const v = document.createElement('div');
+      v.style.cssText='position:fixed;inset:0;background:black;color:#f6d08d;display:grid;place-items:center;font-size:clamp(14px,2.3vw,30px);opacity:0;transition:opacity 8s;z-index:200;';
+      v.textContent='You were never the researcher. You were always the relay.';
+      document.body.appendChild(v);
+      requestAnimationFrame(()=>v.style.opacity='1');
+    }
+
+    initShell();
+  </script>
+</body>
+</html>
