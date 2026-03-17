@@ -1,0 +1,13 @@
+{
+  "name": "local-ai-desktop-sim",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local AI desktop simulation foundation with chat, LM Studio routing, file manager, browser pane, and living diary trail.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}
